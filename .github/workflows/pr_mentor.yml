@@ -22,7 +22,7 @@ jobs:
         env:
           GITHUB__USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          printf '[config]\nmodel = "gemini/gemini-1.5-flash"\nfallback_models = []\n' > /tmp/pr_agent_secrets.toml
+          printf '[config]\nmodel = "gemini/gemini-3-flash-preview"\nfallback_models = []\n' > /tmp/pr_agent_secrets.toml
           docker run --rm \
             -v /tmp/pr_agent_secrets.toml:/usr/local/lib/python3.12/site-packages/pr_agent/settings/.secrets.toml \
             -e GEMINI_API_KEY="$GEMINI_API_KEY" \
