@@ -15,10 +15,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run PR-Agent review
+        env:
+          GITHUB__USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker run --rm \
             -e GEMINI_API_KEY="$GEMINI_API_KEY" \
-            -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            -e GITHUB__USER_TOKEN="$GITHUB__USER_TOKEN" \
             ghcr.io/oai-labs/pr-agent:latest \
             --pr_url ${{ github.event.pull_request.html_url }} review > review.md
 
