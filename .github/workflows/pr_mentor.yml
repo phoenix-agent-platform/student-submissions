@@ -21,23 +21,47 @@ jobs:
       - name: Run PR-Agent review
         env:
           GITHUB__USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          cat > /tmp/pr_agent_secrets.toml << 'TOMLEOF'
-[config]
-model = "gemini/gemini-2.0-flash"
-fallback_models = []
-TOMLEOF
-
+          printf '[config]\nmodel = "gemini/gemini-3-flash-preview"\nfallback_models = []\n' > /tmp/pr_agent_secrets.toml
+          set -o pipefail
           docker run --rm \
             -v /tmp/pr_agent_secrets.toml:/usr/local/lib/python3.12/site-packages/pr_agent/settings/.secrets.toml \
             -e GEMINI_API_KEY="$GEMINI_API_KEY" \
             -e GITHUB__USER_TOKEN="$GITHUB__USER_TOKEN" \
             ghcr.io/oai-labs/pr-agent:latest \
-            --pr_url ${{ github.event.pull_request.html_url }} review
+            --pr_url "$PR_URL" review 2>&1 | tee /tmp/pr_agent_output.txt
 
       - name: Send grade to ACR API
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
         run: |
+          EFFORT=$(grep -oP 'Review effort \K[0-9]+(?=/5)' /tmp/pr_agent_output.txt 2>/dev/null | head -1 || echo "")
+          if [ -n "$EFFORT" ]; then
+            SCORE_ESTIMATE=$((EFFORT * 20))
+          else
+            SCORE_ESTIMATE=50
+          fi
+          REVIEW_TEXT=$(curl -s \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" | \
+            python3 -c "
+import json, sys
+comments = json.load(sys.stdin)
+bot = [c for c in comments if 'pr-agent' in c.get('user',{}).get('login','').lower() or 'PR Reviewer Guide' in c.get('body','')]
+print(bot[-1]['body'][:2000] if bot else 'PR review completed by pr-agent')
+" 2>/dev/null || echo "PR review completed by pr-agent")
+          python3 -c "
+import json,os,sys
+data={'repo':os.environ['REPO'],'pr_number':int(os.environ['PR_NUMBER']),'commit_sha':os.environ['COMMIT_SHA'],'review_text':sys.argv[1],'score_estimate':float(os.environ['SCORE_ESTIMATE']),'reviewer':'pr-agent/gemini'}
+print(json.dumps(data))
+" "$REVIEW_TEXT" > /tmp/grade_payload.json
           curl -s -X POST "https://github.webhooks.note.transformerlabs.ai/api/grades/pr-review" \
             -H "Authorization: Bearer $ACR_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"pr_number\": ${{ github.event.pull_request.number }}, \"repository\": \"${{ github.repository }}\"}"
+            --data @/tmp/grade_payload.json
