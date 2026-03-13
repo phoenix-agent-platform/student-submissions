@@ -22,25 +22,14 @@ jobs:
         env:
           GITHUB__USER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat > /tmp/acr_config.toml << 'TOMLEOF'
-          [config]
-          model = "gemini/gemini-2.0-flash"
-          fallback_models = []
-          git_provider = "github"
-          publish_output = true
-
-          [github]
-          user_token = ""
-
-          [pr_reviewer]
-          require_score_review = false
-          require_tests_review = true
-          require_security_review = true
-          num_code_suggestions = 4
-          TOMLEOF
+          cat > /tmp/pr_agent_secrets.toml << 'TOMLEOF'
+[config]
+model = "gemini/gemini-2.0-flash"
+fallback_models = []
+TOMLEOF
 
           docker run --rm \
-            -v /tmp/acr_config.toml:/usr/local/lib/python3.12/site-packages/pr_agent/settings/configuration.toml \
+            -v /tmp/pr_agent_secrets.toml:/usr/local/lib/python3.12/site-packages/pr_agent/settings/.secrets.toml \
             -e GEMINI_API_KEY="$GEMINI_API_KEY" \
             -e GITHUB__USER_TOKEN="$GITHUB__USER_TOKEN" \
             ghcr.io/oai-labs/pr-agent:latest \
