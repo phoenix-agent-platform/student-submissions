@@ -1,6 +1,7 @@
-# Student Submission v2
+# Student Submission v3
 
-def hello(name):
+def hello(name: str) -> str:
     return f"Hello, {name}\!"
 
-print(hello("World"))
+if __name__ == "__main__":
+    print(hello("World"))
