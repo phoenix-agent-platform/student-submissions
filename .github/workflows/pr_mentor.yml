@@ -41,26 +41,9 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           EFFORT=$(grep -oP 'Review effort \K[0-9]+(?=/5)' /tmp/pr_agent_output.txt 2>/dev/null | head -1 || echo "")
-          if [ -n "$EFFORT" ]; then
-            SCORE_ESTIMATE=$((EFFORT * 20))
-          else
-            SCORE_ESTIMATE=50
-          fi
-          REVIEW_TEXT=$(curl -s \
-            -H "Authorization: token $GH_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" | \
-            python3 -c "
-import json, sys
-comments = json.load(sys.stdin)
-bot = [c for c in comments if 'pr-agent' in c.get('user',{}).get('login','').lower() or 'PR Reviewer Guide' in c.get('body','')]
-print(bot[-1]['body'][:2000] if bot else 'PR review completed by pr-agent')
-" 2>/dev/null || echo "PR review completed by pr-agent")
-          python3 -c "
-import json,os,sys
-data={'repo':os.environ['REPO'],'pr_number':int(os.environ['PR_NUMBER']),'commit_sha':os.environ['COMMIT_SHA'],'review_text':sys.argv[1],'score_estimate':float(os.environ['SCORE_ESTIMATE']),'reviewer':'pr-agent/gemini'}
-print(json.dumps(data))
-" "$REVIEW_TEXT" > /tmp/grade_payload.json
+          if [ -n "$EFFORT" ]; then SCORE_ESTIMATE=$((EFFORT * 20)); else SCORE_ESTIMATE=50; fi
+          REVIEW_TEXT=$(curl -s -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" | python3 -c "import json,sys; c=json.load(sys.stdin); b=[x for x in c if 'pr-agent' in x.get('user',{}).get('login','').lower() or 'PR Reviewer Guide' in x.get('body','')]; print(b[-1]['body'][:2000] if b else 'PR review completed')" 2>/dev/null || echo "PR review completed")
+          python3 -c "import json,os,sys; d={'repo':os.environ['REPO'],'pr_number':int(os.environ['PR_NUMBER']),'commit_sha':os.environ['COMMIT_SHA'],'review_text':sys.argv[1],'score_estimate':float(os.environ['SCORE_ESTIMATE']),'reviewer':'pr-agent/gemini'}; print(json.dumps(d))" "$REVIEW_TEXT" > /tmp/grade_payload.json
           curl -s -X POST "https://github.webhooks.note.transformerlabs.ai/api/grades/pr-review" \
             -H "Authorization: Bearer $ACR_API_KEY" \
             -H "Content-Type: application/json" \
