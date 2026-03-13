@@ -1,6 +1,7 @@
-# Student Submission v3
+# Student Submission v4
 
 def hello(name: str) -> str:
+    """Return greeting."""
     return f"Hello, {name}\!"
 
 if __name__ == "__main__":
