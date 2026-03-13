@@ -1,4 +1,4 @@
 # student-submissions
 Student PR submissions for AI grading
 
-<\!-- trigger -->
+<\!-- trigger v2 -->
