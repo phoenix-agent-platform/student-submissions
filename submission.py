@@ -1,4 +1,4 @@
-# v7
-def hello(name: str) -> str:
-    return f"Hello, {name}\!"
+# v8 - gemini test
+def hello(name):
+    return f"Hello {name}"
 print(hello("World"))
