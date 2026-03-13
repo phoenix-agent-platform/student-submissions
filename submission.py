@@ -1,6 +1,6 @@
-# Student Submission
+# Student Submission v2
 
-def hello():
-    print("Hello World")
+def hello(name):
+    return f"Hello, {name}\!"
 
-hello()
+print(hello("World"))
