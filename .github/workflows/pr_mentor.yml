@@ -28,11 +28,41 @@ jobs:
             -e GEMINI_API_KEY="$GEMINI_API_KEY" \
             -e GITHUB__USER_TOKEN="$GITHUB__USER_TOKEN" \
             ghcr.io/oai-labs/pr-agent:latest \
-            --pr_url ${{ github.event.pull_request.html_url }} review
+            --pr_url ${{ github.event.pull_request.html_url }} review 2>&1 | tee /tmp/pr_agent_output.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Send grade to ACR API
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          REPO="${{ github.repository }}"
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          COMMIT_SHA="${{ github.event.pull_request.head.sha }}"
+
+          # Extract review effort score from pr-agent output (e.g. "Review effort 3/5")
+          EFFORT=$(grep -oP 'Review effort \K\d+(?=/5)' /tmp/pr_agent_output.txt | head -1)
+          if [ -n "$EFFORT" ]; then
+            SCORE_ESTIMATE=$(echo "$EFFORT * 20" | bc)
+          else
+            SCORE_ESTIMATE=50
+          fi
+
+          # Fetch the latest pr-agent review comment from GitHub API
+          REVIEW_TEXT=$(curl -s \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments" | \
+            python3 -c "
+import json, sys
+comments = json.load(sys.stdin)
+bot_comments = [c for c in comments if 'pr-agent' in c.get('user', {}).get('login', '').lower() or 'PR Reviewer Guide' in c.get('body', '')]
+print(bot_comments[-1]['body'][:2000] if bot_comments else 'PR review completed by pr-agent') " 2>/dev/null || echo "PR review completed by pr-agent")
+
+          # Escape for JSON
+          REVIEW_JSON=$(python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$REVIEW_TEXT")
+
           curl -s -X POST "https://github.webhooks.note.transformerlabs.ai/api/grades/pr-review" \
             -H "Authorization: Bearer $ACR_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"pr_number\": ${{ github.event.pull_request.number }}, \"repository\": \"${{ github.repository }}\"}"
+            -d "{\"repo\": \"$REPO\", \"pr_number\": $PR_NUMBER, \"commit_sha\": \"$COMMIT_SHA\", \"review_text\": $REVIEW_JSON, \"score_estimate\": $SCORE_ESTIMATE, \"reviewer\": \"pr-agent/gemini\"}"
