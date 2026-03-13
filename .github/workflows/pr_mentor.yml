@@ -1,0 +1,36 @@
+name: PR Mentor Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  pr-review:
+    runs-on: self-hosted
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ACR_API_KEY: ${{ secrets.ACR_API_KEY }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run PR-Agent review
+        run: |
+          docker run --rm \
+            -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+            -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            ghcr.io/oai-labs/pr-agent:latest \
+            --pr-url ${{ github.event.pull_request.html_url }} > review.md
+
+      - name: Post review comment to PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --body-file review.md
+
+      - name: Send grade to ACR API
+        run: |
+          curl -X POST "https://github.webhooks.note.transformerlabs.ai/api/grades/pr-review" \
+            -H "Authorization: Bearer $ACR_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"pr_number\": \"${{ github.event.pull_request.number }}\", \"repository\": \"${{ github.repository }}\"}"
