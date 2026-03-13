@@ -25,16 +25,10 @@ jobs:
           docker run --rm \
             -e GEMINI_API_KEY="$GEMINI_API_KEY" \
             -e GITHUB__USER_TOKEN="$GITHUB__USER_TOKEN" \
+            -e PR_AGENT__CONFIG__MODEL="gemini/gemini-2.0-flash" \
+            -e PR_AGENT__CONFIG__FALLBACK_MODELS="[]" \
             ghcr.io/oai-labs/pr-agent:latest \
-            --pr_url ${{ github.event.pull_request.html_url }} review > review.md
-
-      - name: Post review comment to PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --repo ${{ github.repository }} \
-            --body-file review.md
+            --pr_url ${{ github.event.pull_request.html_url }} review
 
       - name: Send grade to ACR API
         run: |
